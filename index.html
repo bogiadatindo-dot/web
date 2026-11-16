@@ -10,6 +10,20 @@
     .container { width: 100%; max-width: 720px; }
     .card { background: #1e293b; border-radius: 12px; padding: 20px; margin-bottom: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
     h2, h3 { margin-top: 0; color: #38bdf8; }
+    .subtitle { font-size: 13px; color: #94a3b8; margin-top: -6px; margin-bottom: 12px; font-weight: 500; }
+    
+    /* Chữ By Teddy Mod to, nổi bật tại panel chỉnh key */
+    .brand-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: #38bdf8;
+      background: linear-gradient(90deg, #38bdf8, #818cf8);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 16px;
+      letter-spacing: 0.5px;
+    }
+
     .row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
     input, select, button { padding: 10px 12px; border-radius: 8px; border: 1px solid #334155; font-size: 14px; }
     input, select { background: #0f172a; color: #fff; flex: 1; min-width: 140px; }
@@ -33,18 +47,22 @@
   <!-- Màn hình khóa mật khẩu quản trị -->
   <div class="card" id="loginCard">
     <h3>🔒 Đăng Nhập Quản Trị Key</h3>
+    <div class="subtitle">By Teddy Mod</div>
     <div class="row">
       <input type="password" id="pinInput" placeholder="Nhập mật khẩu quản trị (Mặc định: 123456)...">
       <button id="loginBtn">Mở Khóa</button>
     </div>
   </div>
 
-  <!-- Khu vực tạo Key mới -->
+  <!-- Khu vực tạo Key mới (Panel chính) -->
   <div class="card" id="mainPanel" style="display:none;">
-    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
       <h2 style="margin:0;">⚡ Quản Lý Key</h2>
       <button class="secondary" id="lockBtn" style="padding:6px 10px; font-size:12px;">Khóa Web</button>
     </div>
+    
+    <!-- Chữ By Teddy Mod đã được làm to ra và cách điệu tại đây -->
+    <div class="brand-title">👑 By Teddy Mod</div>
 
     <div class="row">
       <input type="text" id="newKey" placeholder="Mã Key (để trống = tự tạo)">
@@ -103,7 +121,6 @@
   let keyList = [];
 
   document.addEventListener("DOMContentLoaded", () => {
-    // Gắn sự kiện an toàn tuyệt đối, tránh lỗi ReferenceError
     document.getElementById("loginBtn").addEventListener("click", checkPin);
     document.getElementById("pinInput").addEventListener("keyup", (e) => {
       if (e.key === "Enter") checkPin();
@@ -235,7 +252,6 @@
       tbody.appendChild(tr);
     });
 
-    // Gắn sự kiện click cho các nút động trong bảng
     document.querySelectorAll(".copy").forEach(btn => {
       btn.addEventListener("click", () => copyText(btn.getAttribute("data-key")));
     });
