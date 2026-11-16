@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Key Server Dashboard</title>
+  <style>
+    * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { background: #0f172a; color: #f8fafc; margin: 0; padding: 16px; display: flex; justify-content: center; }
+    .container { width: 100%; max-width: 720px; }
+    .card { background: #1e293b; border-radius: 12px; padding: 20px; margin-bottom: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+    h2, h3 { margin-top: 0; color: #38bdf8; }
+    .row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+    input, select, button { padding: 10px 12px; border-radius: 8px; border: 1px solid #334155; font-size: 14px; }
+    input, select { background: #0f172a; color: #fff; flex: 1; min-width: 140px; }
+    button { background: #0284c7; color: #fff; border: none; font-weight: 600; cursor: pointer; transition: 0.2s; }
+    button:hover { background: #0369a1; }
+    button.danger { background: #dc2626; padding: 6px 10px; font-size: 12px; }
+    button.danger:hover { background: #b91c1c; }
+    button.copy { background: #10b981; padding: 6px 10px; font-size: 12px; }
+    button.secondary { background: #475569; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px; }
+    th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid #334155; }
+    th { color: #94a3b8; }
+    .badge { padding: 3px 8px; border-radius: 6px; font-size: 11px; font-weight: bold; }
+    .active { background: #065f46; color: #34d399; }
+    .expired { background: #7f1d1d; color: #fca5a5; }
+    .status { font-size: 13px; color: #fbbf24; margin-top: 8px; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <!-- Màn hình khóa mật khẩu quản trị -->
+  <div class="card" id="loginCard">
+    <h3>🔒 Đăng Nhập Quản Trị Key</h3>
+    <div class="row">
+      <input type="password" id="pinInput" placeholder="Nhập mật khẩu quản trị (Mặc định: 123456)..." onkeyup="if(event.key==='Enter') checkPin()">
+      <button onclick="checkPin()">Mở Khóa</button>
+    </div>
+  </div>
+
+  <!-- Khu vực tạo Key mới -->
+  <div class="card" id="mainPanel" style="display:none;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+      <h2 style="margin:0;">⚡ Quản Lý Key</h2>
+      <button class="secondary" onclick="lockDashboard()" style="padding:6px 10px; font-size:12px;">Khóa Web</button>
+    </div>
+
+    <div class="row">
+      <input type="text" id="newKey" placeholder="Mã Key (để trống = tự tạo)">
+      <button class="secondary" onclick="generateRandomKey()">🎲 Random</button>
+    </div>
+    <div class="row">
+      <select id="durationSelect" onchange="toggleCustomDate()">
+        <option value="1h">1 Giờ</option>
+        <option value="1d" selected>1 Ngày (24h)</option>
+        <option value="7d">7 Ngày (1 Tuần)</option>
+        <option value="30d">30 Ngày (1 Tháng)</option>
+        <option value="LIFETIME">Vĩnh viễn (LIFETIME)</option>
+        <option value="CUSTOM">Chọn ngày giờ cụ thể...</option>
+      </select>
+      <input type="datetime-local" id="customDate" style="display:none;">
+      <input type="text" id="noteInput" placeholder="Ghi chú (Tên khách...)">
+    </div>
+    <button style="width:100%;" onclick="addKey()">➕ Thêm & Lưu Key Lên GitHub</button>
+    <div class="status" id="statusMsg"></div>
+  </div>
+
+  <!-- Danh sách Key -->
+  <div class="card" id="listPanel" style="display:none;">
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <h3 style="margin:0;">📋 Danh sách Key (<span id="keyCount">0</span>)</h3>
+      <button class="secondary" onclick="loadKeys()" style="padding:6px 10px; font-size:12px;">🔄 Tải lại</button>
+    </div>
+    <div style="overflow-x:auto;">
+      <table>
+        <thead>
+          <tr>
+            <th>Mã Key</th>
+            <th>Hết Hạn (UTC+7)</th>
+            <th>Ghi Chú</th>
+            <th>Trạng Thái</th>
+            <th>Thao Tác</th>
+          </tr>
+        </thead>
+        <tbody id="keyTableBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ================= CẤU HÌNH HỆ THỐNG =================
+  const OWNER = "bogiadatindo-dot";
+  const REPO = "key";
+  const FILE_PATH = "key";
+
+  // Mật khẩu mở khóa trang web quản trị:
+  const ADMIN_PIN = "123456";
+
+  // Token GitHub của bạn được tích hợp sẵn trực tiếp ở đây:
+  const GITHUB_TOKEN = "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";
+  // ====================================================
+
+  let currentSha = "";
+  let keyList = [];
+
+  window.onload = () => {
+    if (sessionStorage.getItem("admin_unlocked") === "true") {
+      unlockUI();
+    }
+  };
+
+  function checkPin() {
+    const input = document.getElementById("pinInput").value.trim();
+    if (input === ADMIN_PIN) {
+      sessionStorage.setItem("admin_unlocked", "true");
+      unlockUI();
+    } else {
+      alert("Sai mật khẩu quản trị!");
+    }
+  }
+
+  function unlockUI() {
+    document.getElementById("loginCard").style.display = "none";
+    document.getElementById("mainPanel").style.display = "block";
+    document.getElementById("listPanel").style.display = "block";
+    loadKeys();
+  }
+
+  function lockDashboard() {
+    sessionStorage.removeItem("admin_unlocked");
+    location.reload();
+  }
+
+  function setStatus(msg) {
+    document.getElementById("statusMsg").innerText = msg;
+  }
+
+  function generateRandomKey() {
+    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+    let res = "VIP-";
+    for (let i = 0; i < 8; i++) res += chars.charAt(Math.floor(Math.random() * chars.length));
+    document.getElementById("newKey").value = res;
+  }
+
+  function toggleCustomDate() {
+    const val = document.getElementById("durationSelect").value;
+    document.getElementById("customDate").style.display = (val === "CUSTOM") ? "block" : "none";
+  }
+
+  function formatVNDate(dateObj) {
+    const vnTime = new Date(dateObj.toLocaleString("en-US", { timeZone: "Asia/Ho_Chi_Minh" }));
+    const y = vnTime.getFullYear();
+    const m = String(vnTime.getMonth() + 1).padStart(2, "0");
+    const d = String(vnTime.getDate()).padStart(2, "0");
+    const h = String(vnTime.getHours()).padStart(2, "0");
+    const min = String(vnTime.getMinutes()).padStart(2, "0");
+    return `${y}-${m}-${d} ${h}:${min}`;
+  }
+
+  function calculateExpiry() {
+    const type = document.getElementById("durationSelect").value;
+    if (type === "LIFETIME") return "LIFETIME";
+    if (type === "CUSTOM") {
+      const customVal = document.getElementById("customDate").value;
+      if (!customVal) return null;
+      return customVal.replace("T", " ");
+    }
+    const now = new Date();
+    if (type === "1h") now.setHours(now.getHours() + 1);
+    if (type === "1d") now.setDate(now.getDate() + 1);
+    if (type === "7d") now.setDate(now.getDate() + 7);
+    if (type === "30d") now.setDate(now.getDate() + 30);
+    return formatVNDate(now);
+  }
+
+  async function loadKeys() {
+    setStatus("⏳ Đang tải danh sách key từ GitHub...");
+    try {
+      const res = await fetch(`https://api.github.com/repos/${OWNER}/${REPO}/contents/${FILE_PATH}?t=${Date.now()}`, {
+        headers: { "Authorization": `Bearer ${GITHUB_TOKEN}`, "Accept": "application/vnd.github.v3+json" }
+      });
+      if (!res.ok) throw new Error("Không thể tải file! Token có thể không hợp lệ hoặc hết hạn.");
+      const data = await res.json();
+      currentSha = data.sha;
+      
+      const decodedText = decodeURIComponent(escape(atob(data.content.replace(/\n/g, ""))));
+      parseAndRender(decodedText);
+      setStatus("✅ Đã đồng bộ dữ liệu mới nhất.");
+    } catch (err) {
+      setStatus("❌ " + err.message);
+    }
+  }
+
+  function parseAndRender(rawText) {
+    const lines = rawText.split(/\r?\n/).filter(l => l.trim() !== "");
+    keyList = lines.map(line => {
+      const parts = line.split("|");
+      return {
+        key: (parts[0] || "").trim(),
+        expiry: (parts[1] || "LIFETIME").trim(),
+        note: (parts[2] || "").trim()
+      };
+    });
+
+    const tbody = document.getElementById("keyTableBody");
+    tbody.innerHTML = "";
+    document.getElementById("keyCount").innerText = keyList.length;
+
+    const nowVNStr = formatVNDate(new Date());
+
+    keyList.forEach((item, index) => {
+      const isExpired = item.expiry !== "LIFETIME" && item.expiry < nowVNStr;
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td><strong>${item.key}</strong></td>
+        <td>${item.expiry === "LIFETIME" ? "Vĩnh viễn" : item.expiry}</td>
+        <td>${item.note || "-"}</td>
+        <td><span class="badge ${isExpired ? 'expired' : 'active'}">${isExpired ? 'Hết hạn' : 'Hoạt động'}</span></td>
+        <td style="white-space:nowrap;">
+          <button class="copy" onclick="copyText('${item.key}')">Copy</button>
+          <button class="danger" onclick="deleteKey(${index})">Xóa</button>
+        </td>
+      `;
+      tbody.appendChild(tr);
+    });
+  }
+
+  async function syncToGitHub(commitMsg) {
+    setStatus("⏳ Đang lưu thay đổi lên GitHub...");
+    const contentStr = keyList.map(k => `${k.key}|${k.expiry}${k.note ? '|' + k.note : ''}`).join("\n");
+    const encodedContent = btoa(unescape(encodeURIComponent(contentStr)));
+
+    try {
+      const res = await fetch(`https://api.github.com/repos/${OWNER}/${REPO}/contents/${FILE_PATH}`, {
+        method: "PUT",
+        headers: {
+          "Authorization": `Bearer ${GITHUB_TOKEN}`,
+          "Accept": "application/vnd.github.v3+json",
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          message: commitMsg,
+          content: encodedContent,
+          sha: currentSha
+        })
+      });
+      if (!res.ok) throw new Error("Không thể lưu file! Hãy tải lại trang rồi thử lại.");
+      const result = await res.json();
+      currentSha = result.content.sha;
+      parseAndRender(contentStr);
+      setStatus("✅ Đã cập nhật lên Server thành công!");
+    } catch (err) {
+      setStatus("❌ " + err.message);
+    }
+  }
+
+  async function addKey() {
+    let keyVal = document.getElementById("newKey
