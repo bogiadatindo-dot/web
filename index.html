@@ -34,8 +34,8 @@
   <div class="card" id="loginCard">
     <h3>🔒 Đăng Nhập Quản Trị Key</h3>
     <div class="row">
-      <input type="password" id="pinInput" placeholder="Nhập mật khẩu quản trị (Mặc định: 123456)..." onkeyup="if(event.key==='Enter') checkPin()">
-      <button onclick="checkPin()">Mở Khóa</button>
+      <input type="password" id="pinInput" placeholder="Nhập mật khẩu quản trị (Mặc định: 123456)...">
+      <button id="loginBtn">Mở Khóa</button>
     </div>
   </div>
 
@@ -43,15 +43,15 @@
   <div class="card" id="mainPanel" style="display:none;">
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
       <h2 style="margin:0;">⚡ Quản Lý Key</h2>
-      <button class="secondary" onclick="lockDashboard()" style="padding:6px 10px; font-size:12px;">Khóa Web</button>
+      <button class="secondary" id="lockBtn" style="padding:6px 10px; font-size:12px;">Khóa Web</button>
     </div>
 
     <div class="row">
       <input type="text" id="newKey" placeholder="Mã Key (để trống = tự tạo)">
-      <button class="secondary" onclick="generateRandomKey()">🎲 Random</button>
+      <button class="secondary" id="randomBtn">🎲 Random</button>
     </div>
     <div class="row">
-      <select id="durationSelect" onchange="toggleCustomDate()">
+      <select id="durationSelect">
         <option value="1h">1 Giờ</option>
         <option value="1d" selected>1 Ngày (24h)</option>
         <option value="7d">7 Ngày (1 Tuần)</option>
@@ -62,7 +62,7 @@
       <input type="datetime-local" id="customDate" style="display:none;">
       <input type="text" id="noteInput" placeholder="Ghi chú (Tên khách...)">
     </div>
-    <button style="width:100%;" onclick="addKey()">➕ Thêm & Lưu Key Lên GitHub</button>
+    <button style="width:100%;" id="addKeyBtn">➕ Thêm & Lưu Key Lên GitHub</button>
     <div class="status" id="statusMsg"></div>
   </div>
 
@@ -70,7 +70,7 @@
   <div class="card" id="listPanel" style="display:none;">
     <div style="display:flex; justify-content:space-between; align-items:center;">
       <h3 style="margin:0;">📋 Danh sách Key (<span id="keyCount">0</span>)</h3>
-      <button class="secondary" onclick="loadKeys()" style="padding:6px 10px; font-size:12px;">🔄 Tải lại</button>
+      <button class="secondary" id="reloadBtn" style="padding:6px 10px; font-size:12px;">🔄 Tải lại</button>
     </div>
     <div style="overflow-x:auto;">
       <table>
@@ -95,21 +95,30 @@
   const REPO = "key";
   const FILE_PATH = "key";
 
-  // Mật khẩu mở khóa trang web quản trị:
   const ADMIN_PIN = "123456";
-
-  // Token GitHub của bạn được tích hợp sẵn trực tiếp ở đây:
   const GITHUB_TOKEN = "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";
   // ====================================================
 
   let currentSha = "";
   let keyList = [];
 
-  window.onload = () => {
+  document.addEventListener("DOMContentLoaded", () => {
+    // Gắn sự kiện an toàn tuyệt đối, tránh lỗi ReferenceError
+    document.getElementById("loginBtn").addEventListener("click", checkPin);
+    document.getElementById("pinInput").addEventListener("keyup", (e) => {
+      if (e.key === "Enter") checkPin();
+    });
+
+    document.getElementById("lockBtn").addEventListener("click", lockDashboard);
+    document.getElementById("randomBtn").addEventListener("click", generateRandomKey);
+    document.getElementById("durationSelect").addEventListener("change", toggleCustomDate);
+    document.getElementById("addKeyBtn").addEventListener("click", addKey);
+    document.getElementById("reloadBtn").addEventListener("click", loadKeys);
+
     if (sessionStorage.getItem("admin_unlocked") === "true") {
       unlockUI();
     }
-  };
+  });
 
   function checkPin() {
     const input = document.getElementById("pinInput").value.trim();
@@ -219,11 +228,19 @@
         <td>${item.note || "-"}</td>
         <td><span class="badge ${isExpired ? 'expired' : 'active'}">${isExpired ? 'Hết hạn' : 'Hoạt động'}</span></td>
         <td style="white-space:nowrap;">
-          <button class="copy" onclick="copyText('${item.key}')">Copy</button>
-          <button class="danger" onclick="deleteKey(${index})">Xóa</button>
+          <button class="copy" data-key="${item.key}">Copy</button>
+          <button class="danger delete-btn" data-index="${index}">Xóa</button>
         </td>
       `;
       tbody.appendChild(tr);
+    });
+
+    // Gắn sự kiện click cho các nút động trong bảng
+    document.querySelectorAll(".copy").forEach(btn => {
+      btn.addEventListener("click", () => copyText(btn.getAttribute("data-key")));
+    });
+    document.querySelectorAll(".delete-btn").forEach(btn => {
+      btn.addEventListener("click", () => deleteKey(parseInt(btn.getAttribute("data-index"))));
     });
   }
 
@@ -257,4 +274,34 @@
   }
 
   async function addKey() {
-    let keyVal = document.getElementById("newKey
+    let keyVal = document.getElementById("newKey").value.trim();
+    if (!keyVal) {
+      generateRandomKey();
+      keyVal = document.getElementById("newKey").value.trim();
+    }
+    if (keyList.some(k => k.key === keyVal)) return alert("Mã Key này đã tồn tại!");
+
+    const expiryVal = calculateExpiry();
+    if (!expiryVal) return alert("Vui lòng chọn ngày giờ hết hạn!");
+    const noteVal = document.getElementById("noteInput").value.trim().replace(/\|/g, "-");
+
+    keyList.unshift({ key: keyVal, expiry: expiryVal, note: noteVal });
+    document.getElementById("newKey").value = "";
+    document.getElementById("noteInput").value = "";
+    await syncToGitHub(`Add key ${keyVal}`);
+  }
+
+  async function deleteKey(index) {
+    const target = keyList[index];
+    if (!confirm(`Xóa key "${target.key}"? Người dùng sẽ bị văng app ngay lập tức.`)) return;
+    keyList.splice(index, 1);
+    await syncToGitHub(`Delete key ${target.key}`);
+  }
+
+  function copyText(text) {
+    navigator.clipboard.writeText(text);
+    setStatus(`📋 Đã copy key: ${text}`);
+  }
+</script>
+</body>
+</html>
